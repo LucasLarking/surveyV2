@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .questionContainer {
+        border: 1px solid black;
+    }
+</style>
+
+<hr>
+<!-- <form action="" method="POST">
+    {% csrf_token %}
+    {{voteForm}}
+    <button type="submit">submit</button>
+</form> -->
+<h1 data-id="{{survey.id}}">{{survey}}</h1>
+
+{% for question in survey.get_questions %}
+<div data-id="{{question.id}}" class="questionContainer">
+    <h3 class="question">{{question}}</h3>
+    <div class="optionContainer">
+        {% for option in question.get_options %}
+         <div class="option">
+            <input type="{{question.question_type}}" id="option{{option.id}}" name="{{question}}Option"
+                value="{{option}}">
+            <label for="option{{option.id}}">{{option}}</label>
+            {{option.get_votes}}
+        </div>
+        {% endfor %}
+    </div>
+    {% if question.showOtherField %}
+    {{otherForm}}
+    {% endif %}
+    <p class="error"></p>
+</div>
+
+
+{% endfor %}
+
+
+
+<hr>
+<button id="submitVoteFormset">Submit Formset</button>
+<h2>vote formset</h2>
+<!-- <form action="" id="voteFormSet" method="POST">
+    {% csrf_token %}
+    {{optionFormset.management_form}}
+    {{optionFormset}}
+
+    <button type="submit">Submit</button>
+</form> -->
+<form action="" id="voteFormSet" method="POST">
+    {% csrf_token %}
+    {{voteFormset.management_form}}
+
+
+    {% for form in voteFormset%}
+    <hr>
+    <div class="voteContainer">
+        {{form}}
+
+    </div>
+
+    {% endfor %}
+
+    <hr>
+    <button type="submit">Submit</button>
+</form>
+
+<script>
+    //  Variables 
+    let windowUrl = window.location.href;
+    let surveyId = windowUrl.split('/').slice(-1)[0];
+    let url = "{% url 'takeSurvey' 0 %}".replace('0', surveyId)
+    const voteFormset = document.querySelector('#voteFormSet');
+    const allVoteForms = Array.from(document.querySelectorAll('.voteContainer'))
+    const submitBtn = document.querySelector('#submitVoteFormset');
+    const questionContainers = Array.from(document.querySelectorAll('.questionContainer'));
+
+
+    // Event Listners
+    submitBtn.addEventListener('click', submitVoteFormset)
+
+    function submitVoteFormset() {
+
+        let votes = []
+
+        for (let index = 0; index < questionContainers.length; index++) {
+
+            let questionId = parseInt(questionContainers[index].getAttribute('data-Id'))
+            voteOptions = Array.from(questionContainers[index].querySelectorAll('input'))
+
+            for (let i = 0; i < voteOptions.length; i++) {
+                const element = voteOptions[i];
+                if (voteOptions[i].checked) {
+                    let voteId = parseInt(voteOptions[i].parentElement.querySelector('label').getAttribute('for').split('option')[1]);
+                    votes.push([voteId, questionId])
+
+                    let voteForm = allVoteForms[index]
+                    let optionVoteSelect = Array.from(voteForm.querySelectorAll('select'))[0];
+                    let questionVoteSelect = Array.from(voteForm.querySelectorAll('select'))[1];
+                    optionVoteSelect.value = voteId
+                    questionVoteSelect.value = questionId
+                }
+            }
+        }
+        let formdata = new FormData(voteFormset);
+        fetch(url, {
+            method: 'POST',
+            body: formdata
+        })
+            .then(response => response.json())
+            .then(data => {
+
+                console.log(data)
+            })
+            .catch(error => {
+                console.log(error)
+            })
+    }
+
+</script>
+{% endblock content %}

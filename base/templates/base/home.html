@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>home</h1>
+<form action="" method="POST">
+    {% csrf_token %}
+    <div class="surveyContainer">
+        {% for field in surveyForm.visible_fields %}
+        <label for="">{{field.label}}</label>
+
+        {{field}}
+
+        {% if field.errors %}
+        <div class="errorcontainer">
+            {% for error in field.errors %}
+            <p class="error">{{error}}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+
+        {% endfor%}
+        {% for hidden in surveyForm.hidden_fields %}
+        {{hidden}}
+        {% endfor%}
+
+    </div>
+    <input type="submit" value="submit">
+</form>
+{% if surveys %}
+{% for  survey in surveys%}
+<hr>
+<div class="surveyContainer">
+    <h2>{{survey}} - {{survey.id}} </h2>
+    <a href="{% url 'takeSurvey' survey.id %}">take Survey</a> <br>
+    <a href="{% url 'createSurvey' survey.id %}">Edit Survey</a> <br>
+    {% for question in survey.get_questions %}
+    <h3>{{question}} {{question.id}} {{question.showOtherField}}</h3>
+    {% for option in question.get_options %}
+    <p>{{option}} {{option.id}}</p>
+    {% endfor %}
+
+    {{question.otherField}}
+    {% endfor%}
+
+</div>
+<hr>
+
+{% endfor %}
+{% endif %}
+
+{% endblock content %}

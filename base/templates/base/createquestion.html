@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <h1>create question</h1>
+
+    <form action="" id="form" method="POST">
+        {% csrf_token %}
+
+        <br>
+        <div class="questionForm">
+            {{questionForm}}
+            {% if questionForm.errors %}
+            {% for error in questionForm.errors %}
+            <p class="error">{{error}}</p>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+
+        {{optionFormset.management_form}}
+        <div class="optionFormset">
+            {% for optionForm in optionFormset%}
+            <div class="optionForm">
+                {{optionForm}}
+            </div>
+            {% endfor %}
+        </div>
+
+
+        <br>
+        <input class="submit" type="submit" value="Add New Question">
+    </form>
+    <hr>
+    <div id="empty-form">
+        {{ optionFormset.empty_form }}
+    </div>
+    <button id="newOption">Add option</button>
+    <script>
+        const form = document.querySelector('form');
+        const optionFormset = form.querySelector('.optionFormset')
+        const hiddenForm = document.querySelector('#empty-form')
+        const newOptionBtn = document.querySelector('#newOption')
+
+
+        newOptionBtn.addEventListener('click', addOption)
+
+
+        function addOption() {
+            let formCount = form.querySelector('#id_optionFormset-TOTAL_FORMS');
+            let formCOuntInt = parseInt(formCount.getAttribute('value')) + 1;
+            let minNum = form.querySelector('#id_optionFormset-MIN_NUM_FORMS')
+            let minNumInt = parseInt(minNum.getAttribute('value')) + 1;
+            minNum.setAttribute('value', minNumInt)
+
+
+
+            let clone = hiddenForm.cloneNode(true);
+            clone.removeAttribute('id', '')
+            clone.setAttribute('class', 'optionForm')
+
+            let labelClone = clone.querySelector('label');
+            let regex = labelClone.getAttribute('for')
+            regex = regex.replace('__prefix__', formCOuntInt - 1)
+            labelClone.setAttribute('for', regex)
+            clone.querySelector('input').setAttribute('id', regex)
+            clone.querySelector('input').setAttribute('name', regex.replace('id_', ''))
+            
+            
+            Array.from(clone.querySelectorAll('input'))[1].setAttribute('id', regex.replace('-option',  '-id'))
+            Array.from(clone.querySelectorAll('input'))[1].setAttribute('name', regex.replace('-option',  '-id'))
+
+
+            optionFormset.appendChild(clone)
+            formCount.setAttribute('value', formCOuntInt)
+
+
+
+        }
+    </script>
+</body>
+
+</html>

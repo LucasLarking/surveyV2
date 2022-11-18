@@ -1,0 +1,951 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .error {
+        color: red;
+        padding: 0;
+        margin: 5px 0;
+    }
+
+    .preview {
+        border: 2px solid blue;
+    }
+
+    .previewOptionContainer {
+        background-color: lightblue;
+        margin: 20px 0;
+    }
+
+
+    .previewIcon {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        border: 2px solid black;
+    }
+
+    .hide {
+        display: none;
+    }
+</style>
+<h1>{{survey.survey}} </h1>
+
+
+
+<form action="" id="surveyForm" method="POST">
+    {% csrf_token %}
+    <div class="surveyContainer">
+        {% for field in surveyForm.visible_fields %}
+        <label for="">{{field.label}}</label>
+
+        <div class="surveyField">
+            {{field}}
+        </div>
+
+        <div class="errorcontainer">
+            {% for error in field.errors %}
+            <p class="error">{{error}}</p>
+            {% endfor %}
+        </div>
+
+        {% endfor%}
+        {% for hidden in surveyForm.hidden_fields %}
+        {{hidden}}
+        {% endfor%}
+
+    </div>
+
+</form>
+
+
+
+
+<div class="previewContainer">
+    {% for question in survey.get_questions %}
+
+    <div class="preview" data-id="{{question.id}}">
+        <div class="question">
+            <input type="text" value="{{question.question}}">
+            <p class="error"></p>
+        </div>
+
+
+        <div class="questionType">
+
+            <select name="questionType" id="">
+
+
+                <option value="----------">----------</option>
+                {% if question.question_type == 'radio' %}
+                <option value="radio" selected>radio</option>
+                <option value="checkbox">checkbox</option>
+                {% else %}
+                <option value="radio">radio</option>
+                <option value="checkbox" selected>checkbox</option>
+                {% endif %}
+
+
+            </select>
+        </div>
+
+
+        <div class="options">
+            {% for option in question.get_options %}
+            <div class="optionContainer" data-id="{{option.id}}">
+
+                <div class="icon"></div>
+                <input type="text" name="name_{{option.option}}" class="previewIinput" value="{{option.option}}">
+                {% if question.number_of_options > 1 %}
+                <button class="deleteOption">Delete</button>
+                {% endif %}
+                <p class="error"></p>
+            </div>
+            {% endfor %}
+        </div>
+
+
+
+        {% if question.showOtherField %}
+        <div class="otherField">
+            <input disabled="disabled" placeholder="Other" type="text">
+            <button type="button" class="deleteotherField">Delete</button>
+        </div>
+        <div class="buttons">
+            <button class="deleteQuestion">Delete</button>
+            <button class="addBtn">Add</button>
+        </div>
+        {% else %}
+
+        <div class="buttons">
+            <button type="button" class="addOtherFieldBtn">Add other field</button>
+            <button class="deleteQuestion">Delete</button>
+            <button class="addBtn">Add</button>
+        </div>
+        {% endif %}
+
+        <p class="error"></p>
+    </div>
+
+    {% endfor %}
+
+
+</div>
+<form action="" id="form" method="POST">
+    {% csrf_token %}
+
+    <br>
+    <div class="questionContainer">
+
+        {% for field in questionForm.visible_fields %}
+        <div class="questionField">
+            <label for="">{{field.label}}</label>
+            {{field}}
+
+            <div class="errorcontainer">
+                {% for error in field.errors %}
+                <p class="error">{{error}}</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% endfor%}
+        {% for hidden in questionForm.hidden_fields %}
+        {{hidden}}
+        {% endfor%}
+    </div>
+
+
+    {{optionFormset.management_form}}
+    <div class="optionsWrapper">
+
+        {% for option in optionFormset %}
+        <div class="optionContainer">
+            <div class="option">
+                {{ option }}
+                <button type="button" class="removeBtn">-</button>
+
+            </div>
+            <div class="errorcontainer">
+                {% for error in option.errors %}
+                <p class="error">{{error}}</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+
+    </div>
+
+    <div class="otherField hide">
+        {{otherForm}}
+        <p class="error"></p>
+    </div>
+    <br>
+
+    <button type="button" class="otherFieldButton">otherField</button>
+    <button id="addBtn" type="button">Add more</button>
+    <input class="submit" type="submit" value="Add New Question">
+
+
+
+
+</form>
+
+
+<div id="empty-form" class="hidden">
+    {{ formset.empty_form }}
+</div>
+<div id="notify"></div>
+
+<hr>
+
+<!-- {{otherForm}} -->
+
+
+<script>
+
+    // * ######################## Variables ########################
+
+    // Url
+    let windowUrl = window.location.href;
+    let surveyId = windowUrl.split('/').slice(-1)[0];
+    let url = "{% url 'createSurvey' 0 %}".replace('0', surveyId)
+    var rdata;
+
+
+    // Forms
+
+    // QuestionForm
+    let questionForm = document.querySelector('#form');
+    let giveOtherField = false;
+    let OtherFieldCheck = questionForm.querySelector('#id_showOtherField');
+    let otherField = questionForm.querySelector('.otherField');
+    let otherFieldInput = otherField.querySelector('input');
+    let addOptionBtn = questionForm.querySelector('#addBtn');
+    let optionsWrapper = questionForm.querySelector('.optionsWrapper');
+    let removeOptionBtns = questionForm.querySelectorAll('.removeBtn');
+
+    // SyrveyForm
+    let surveyTitle = document.querySelector('h1');
+    let surveyForm = document.querySelector('#surveyForm');
+    let surveyFormInput = surveyForm.querySelector('#id_createSurvey-survey');
+    let surveyErrorContainer = surveyForm.querySelector('.errorcontainer');
+
+    // PreviewForm
+    let previewContainer = document.querySelector('.previewContainer');
+    let allPreviews = Array.from(previewContainer.querySelectorAll('.preview'));
+
+    // * Add Classes
+    otherFieldInput.disabled = true;
+    allPreviews.forEach(preview => {
+        handlePreview(preview)
+    })
+
+
+
+    // * ######################## Event Listners ########################
+
+    // surveyFormInput.addEventListener('focusout', submitSurvey)
+    surveyFormInput.addEventListener('input', updateSurveyH1)
+    surveyForm.addEventListener('focusout', (e) => { e.preventDefault(), submitSurvey() })
+    OtherFieldCheck.addEventListener('click', showOtherField)
+    questionForm.addEventListener('submit', (e) => { e.preventDefault(), questionFormSubmit() })
+    addOptionBtn.addEventListener('click', addOption)
+    removeOptionBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            removeOptions(btn.parentElement.parentElement)
+        })
+    });
+
+
+    // * ######################## Functions ########################
+
+    // Survey Forms
+    function updateSurveyH1() {
+        surveyTitle.textContent = surveyFormInput.value;
+    }
+
+    function submitSurvey() {
+        let formdata = new FormData(surveyForm);
+        let returnDaa = handleFormSubmit(formdata, handleSurverResult)
+
+
+
+    }
+
+    // Preview
+
+    function createPreview(data) {
+        let preview = document.createElement('div');
+        preview.setAttribute('class', 'preview');
+        preview.setAttribute('data-id', data.questionId)
+
+        let question = document.createElement('div');
+        question.setAttribute('class', 'question');
+        let questionInput = document.createElement('input');
+        questionInput.value = data.question
+        question.appendChild(questionInput)
+        let questionError = document.createElement('p');
+        questionError.setAttribute('class', 'error')
+        question.appendChild(questionError)
+
+        preview.appendChild(question);
+
+        let questionTypeField = document.createElement('div');
+        questionTypeField.setAttribute('class', 'questionField');
+
+        let label = document.createElement('label');
+        label.textContent = 'Question Type';
+        questionTypeField.appendChild(label)
+
+        let select = document.createElement('select')
+        select.setAttribute('name', 'question_type')
+
+        let option1 = document.createElement('option');
+        option1.textContent = '---------';
+
+        let option2 = document.createElement('option');
+        option2.textContent = 'radio';
+        if (data.questionType == 'radio') {
+            option2.setAttribute('selected', 'true')
+        }
+
+
+        let option3 = document.createElement('option');
+        option3.textContent = 'checkbox';
+        if (data.questionType == 'checkbox') {
+            option3.setAttribute('selected', 'true')
+        }
+        select.appendChild(option1)
+        select.appendChild(option2)
+        select.appendChild(option3)
+
+        questionTypeField.appendChild(select)
+        preview.appendChild(select)
+
+        let allOptionsContainer = document.createElement('div');
+        allOptionsContainer.setAttribute('class', 'options');
+
+
+        const object = data.optionDict
+        console.log(object)
+        let numberOfOptions = Object.keys(data.optionDict).length;
+        for (const [key, value] of Object.entries(object)) {
+            console.log(key, value)
+            let optionContainer = document.createElement('div');
+            optionContainer.setAttribute('class', 'optionContainer');
+            optionContainer.setAttribute('data-id', value);
+
+
+            let previewInput = document.createElement('input');
+            previewInput.setAttribute('class', 'previewInput');
+            previewInput.setAttribute('type', 'text');
+            previewInput.setAttribute('name', `name_${key}`);
+            previewInput.setAttribute('value', key);
+
+            optionContainer.appendChild(previewInput);
+
+
+            if (numberOfOptions > 1) {
+                let previewDeleteBtn = document.createElement('button');
+                previewDeleteBtn.setAttribute('class', 'previewDeleteBtn');
+                previewDeleteBtn.textContent = 'Delete';
+                optionContainer.appendChild(previewDeleteBtn);
+
+            }
+
+            allOptionsContainer.appendChild(optionContainer);
+
+        }
+
+        let buttons = document.createElement('div');
+        buttons.setAttribute('class', 'buttons');
+
+        let deleteBtn = document.createElement('button');
+        deleteBtn.setAttribute('class', 'deleteQuestion');
+        deleteBtn.textContent = 'Delete';
+
+        let previewAddBtn = document.createElement('button');
+        previewAddBtn.setAttribute('class', 'addBtn');
+        previewAddBtn.textContent = 'Add';
+
+        buttons.appendChild(deleteBtn)
+        buttons.appendChild(previewAddBtn)
+
+        let error = document.createElement('p');
+        error.setAttribute('class', 'error');
+
+        preview.appendChild(question)
+        preview.appendChild(allOptionsContainer)
+
+
+        if (data.showOtherForm) {
+            console.log('Shpw other form')
+            let previewOtherField = document.createElement('div')
+            previewOtherField.setAttribute('class', 'otherField')
+            let previewOtherFieldInput = document.createElement('input');
+            previewOtherFieldInput.setAttribute('type', 'text')
+            previewOtherField.appendChild(previewOtherFieldInput);
+            previewOtherFieldInput.setAttribute('placeholder', 'Other')
+
+
+            let previewOtherFieldBtn = document.createElement('button');
+            previewOtherFieldBtn.setAttribute('type', 'button');
+            previewOtherFieldBtn.setAttribute('class', 'deleteotherField');
+
+
+            // previewOtherFieldBtn.addEventListener('click', () => {
+            //     deletePreviewOtherField(previewOtherFieldBtn)
+            // })
+            let error = document.createElement('p');
+            error.setAttribute('class', 'error');
+
+
+            previewOtherFieldBtn.textContent = 'Delete'
+            previewOtherField.appendChild(previewOtherFieldBtn);
+            previewOtherField.appendChild(error);
+            preview.appendChild(previewOtherField);
+
+
+        }
+
+
+        // preview.appendChild(deleteBtn)
+        // preview.appendChild(previewAddBtn)
+        preview.appendChild(buttons)
+        preview.appendChild(error)
+        handlePreview(preview)
+
+
+
+
+
+
+        document.querySelector('.previewContainer').appendChild(preview)
+    }
+
+    function handlePreview(previewObj) {
+        let questionId = previewObj.getAttribute('data-id')
+        let question = previewObj.querySelector('.question')
+        let questionInput = question.querySelector('input');
+        let otherField = previewObj.querySelector('.otherField');
+        let addOtherFieldBtn = previewObj.querySelector('.addOtherFieldBtn');
+        let optionInputs = Array.from(previewObj.querySelectorAll('.previewIinput'));
+        let deleteQuestionBtn = previewObj.querySelector('.deleteQuestion');
+        let optionBtn = previewObj.querySelector('.addBtn')
+        let select = previewObj.querySelector('select')
+
+        select.addEventListener('change', () => {
+            console.log('changes')
+            let formdata = new FormData();
+            formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            formdata.append('select', select.value);
+            formdata.append('selectQuestion', questionId);
+            handleFormSubmit(formdata, handleSelect, previewObj)
+
+        })
+
+        questionInput.addEventListener('focusout', () => {
+            let formdata = new FormData();
+            formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            formdata.append('questionPreviewTitle', questionInput.value);
+            formdata.append('questionPreviewTitleId', questionId);
+
+
+            handleFormSubmit(formdata, handleChangePreviewQuestionTitle, previewObj)
+
+        })
+
+        if (otherField) {
+            let otherFieldInput = otherField.querySelector('input');
+            otherFieldInput.disabled = true;
+            otherField.querySelector('button').addEventListener('click', () => {
+                deleteotherField(previewObj, otherField)
+            })
+            if (addOtherFieldBtn) {
+                addOtherFieldBtn.remove()
+            }
+
+        }
+
+        if (addOtherFieldBtn) {
+            addOtherFieldBtn.addEventListener('click', () => {
+
+
+                console.log('Added Other field')
+                if (!previewObj.querySelector('.otherField')) {
+
+                    let formdata = new FormData();
+                    formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                    formdata.append('addOtherFieldId', questionId);
+
+
+                    handleFormSubmit(formdata, handleAddOtherFieldResult, previewObj)
+
+                }
+            })
+        }
+
+        optionBtn.addEventListener('click', () => { addPreviewOption(previewObj) })
+
+        let deleteOptionBtns = Array.from(previewObj.querySelectorAll('.deleteOption'));
+
+        deleteOptionBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                deletePreviewOption(previewObj, btn.parentElement)
+            })
+
+        });
+
+        deleteQuestionBtn.addEventListener('click', () => {
+            deletePreviewQuestion(previewObj)
+        })
+
+        optionInputs.forEach(input => {
+            input.addEventListener('focusout', () => {
+                submitPreviewOption(previewObj, input.parentElement)
+            })
+        });
+    }
+
+    function addPreviewOption(previewObj) {
+        let optionContainer = previewObj.querySelector('.options');
+        let options = previewObj.querySelectorAll('.optionContainer');
+        let lastOption = options[options.length - 1];
+        console.log('previewobj', previewObj)
+        console.log(options)
+        console.log(options.length)
+        console.log(previewObj)
+
+        if (options.length == 1) {
+            let btn = document.createElement('button');
+            btn.textContent = 'Delete';
+            btn.setAttribute('class', 'deleteOption');
+            btn.setAttribute('type', 'button');
+            btn.addEventListener('click', () => {
+                deletePreviewOption(previewObj, lastOption)
+            })
+            lastOption.insertBefore(btn, lastOption.querySelector('.error'))
+
+        }
+
+        let questionId = parseInt(previewObj.getAttribute('data-id')) + 1;
+        let newOption = lastOption.cloneNode(true);
+        newOption.setAttribute('data-id', '')
+        let input = newOption.querySelector('input')
+        input.value = '';
+        input.addEventListener('focusout', () => {
+            submitPreviewOption(previewObj, newOption)
+        })
+
+        let newOptionBtn = newOption.querySelector('.deleteOption');
+
+
+        newOptionBtn.addEventListener('click', () => {
+            deletePreviewOption(previewObj, newOptionBtn.parentElement)
+        })
+
+
+
+        // ! Handle updating option
+        // ! Handle deleteing options
+        optionContainer.appendChild(newOption)
+
+
+
+    }
+
+    function deletePreviewOption(previewObj, option) {
+        console.log(previewObj)
+        console.log(option)
+        console.log('value: ', option.querySelector('input').value)
+        let questionId = previewObj.getAttribute('data-id')
+        let optionId = option.getAttribute('data-id')
+        let options = Array.from(previewObj.querySelectorAll('.optionContainer'))
+
+        if (options.length > 1) {
+            if (option.querySelector('input').value) {
+                let formdata = new FormData();
+                formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                formdata.append('previewQuestionId', questionId);
+                formdata.append('previewOptionId', optionId);
+                handleFormSubmit(formdata, handleDeletePreviewOption, previewObj, option);
+
+            } else {
+                option.remove()
+                let options = Array.from(previewObj.querySelectorAll('.optionContainer'))
+
+                if (options.length == 1) {
+                    previewObj.querySelector('.optionContainer').querySelector('button').remove();
+                }
+            }
+
+        }
+
+    }
+
+    function submitPreviewOption(previewObj, option) {
+        console.log('doing shit')
+        let optionValue = option.querySelector('input').value;
+
+        if (optionValue) {
+            let questionId = previewObj.getAttribute('data-id')
+            let optionId = option.getAttribute('data-id')
+            let formdata = new FormData();
+            formdata.append('addPreviewOption', optionValue);
+            formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            formdata.append('questionId', questionId);
+
+            if (optionId) {
+                formdata.append('optionId', optionId);
+            }
+            handleFormSubmit(formdata, handleOptionResult, previewObj)
+        }
+
+        // ! Handle result
+    }
+
+
+    function deletePreviewQuestion(previewObj) {
+        let questionId = previewObj.getAttribute('data-id')
+
+        let formdata = new FormData();
+
+        formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        formdata.append('deletequestionId', questionId);
+
+        handleFormSubmit(formdata, handleDeleteQuesitonResult, previewObj) // ! Handle result
+
+
+    }
+
+    // Other Fields
+    function createPreviewOtherField(previewObj) {
+        let otherField = document.createElement('div')
+        otherField.setAttribute('class', 'otherField')
+        let input = document.createElement('input');
+        input.setAttribute('type', 'text')
+        input.placeholder = 'Other';
+        input.disabled = true;
+        otherField.appendChild(input);
+
+        let btn = document.createElement('button');
+        btn.setAttribute('type', 'button');
+        btn.setAttribute('class', 'deleteOtherField');
+
+        btn.addEventListener('click', () => {
+            deleteotherField(previewObj)
+        })
+
+        btn.textContent = 'Delete'
+        otherField.appendChild(btn);
+
+        // let insertbefore = previewObj.querySelector('.options')
+        // console.log(insertbefore)
+        // insertbefore.insertBefore(otherField, null)
+        previewObj.insertBefore(otherField, previewObj.querySelector('.buttons'))
+
+        previewObj.querySelector('.otherFieldBtn').remove()
+
+    }
+
+    function deleteotherField(previewObj) {
+        console.log('deleting')
+
+        let questionId = previewObj.getAttribute('data-id');
+        let buttonContainer = previewObj.querySelector('.buttons')
+        let otherField = previewObj.querySelector('.otherField')
+
+        formdata = new FormData()
+        formdata.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        formdata.append('DeleteottherFieldQuestionId', questionId);
+        handleFormSubmit(formdata, handleOtherFieldResult, previewObj)
+
+    }
+
+    // * New Question Form 
+
+    function addOption() {
+
+        let options = questionForm.querySelectorAll('.optionContainer');
+
+        let formCount = questionForm.querySelector('#id_form-TOTAL_FORMS');
+        let numberOfForms = options.length - 1;
+        let newOption = options[0].cloneNode(true);
+        let formRegex = RegExp(`form-(\\d){1}-`, 'g');
+        numberOfForms++;
+
+
+        let label = newOption.querySelector('label');
+        console.log(label, 'label')
+        label.setAttribute('for', `id_form-${numberOfForms}-option`)
+
+        let input = newOption.querySelector('input');
+        input.value = '';
+        input.setAttribute('id', `id_form-${numberOfForms}-option`)
+        input.setAttribute('name', `form-${numberOfForms}-option`)
+
+        let hiddenInput = newOption.querySelector('.option').querySelectorAll('input')[1];
+
+        hiddenInput.setAttribute('id', `id_form-${numberOfForms}-id`)
+        hiddenInput.setAttribute('name', `form-${numberOfForms}-id`)
+
+
+        let btn = newOption.querySelector('.removeBtn').addEventListener('click', () => {
+            removeOptions(newOption)
+        })
+        optionsWrapper.appendChild(newOption)
+        formCount.setAttribute('value', `${numberOfForms + 1}`)
+
+    }
+
+    function removeOptions(option) {
+        console.log('remove', option)
+        let options = Array.from(questionForm.querySelectorAll('.optionContainer'));
+        if (options.length > 1) {
+
+            let index = options.indexOf(option) + 1
+            for (i = index; i < options.length; i++) {
+
+                let counter = i - 1
+                let iOption = options[i]
+
+                let label = iOption.querySelector('label');
+
+                label.setAttribute('for', `id_form-${counter}-option`)
+
+                let Input = iOption.querySelector('input');
+                Input.setAttribute('id', `id_form-${counter}-option`)
+                Input.setAttribute('name', `form-${counter}-option`)
+
+                let HiddenInput = iOption.querySelectorAll('input')[1];
+
+                HiddenInput.setAttribute('id', `id_form-${counter}-id`)
+                HiddenInput.setAttribute('name', `form-${counter}-id`)
+
+
+
+            }
+            option.remove()
+
+            let totalForms = questionForm.querySelector('#id_form-TOTAL_FORMS');
+            let numberOfForms = options.length - 1;
+            totalForms.setAttribute('value', `${numberOfForms}`)
+        }
+
+
+
+    }
+
+    function showOtherField() {
+
+        let otherField = questionForm.querySelector('.otherField')
+        otherField.classList.toggle('hide');
+        console.log(otherField)
+
+    }
+
+    function questionFormSubmit() {
+        let formdata = new FormData(questionForm);
+
+        handleFormSubmit(formdata, handleQuestionResult)
+
+    }
+
+    // Handle Submit
+    function handleFormSubmit(formdata, responseFunction, container = 0, item = 0) {
+
+
+        fetch(url, {
+            method: 'POST',
+            body: formdata
+        })
+            .then(response => response.json())
+            .then(data => {
+
+                responseFunction(data, container, item)
+            })
+            .catch(error => {
+                responseFunction(error, container, item)
+            })
+
+    }
+
+    function handleSurverResult(data) {
+        let errors = surveyErrorContainer.querySelectorAll('.error')
+        if (errors) {
+            errors.forEach(error => {
+                error.remove()
+            });
+
+        }
+
+        if (data.errorList) {
+            let messageList = Object.values(data.errorList)
+            let errorMessage = document.createElement('p');
+            errorMessage.setAttribute('class', 'error');
+
+            messageList.forEach(message => {
+                errorMessage.textContent += message[0];
+                console.log(message[0])
+            });
+            surveyErrorContainer.appendChild(errorMessage)
+        } else {
+            console.log('success')
+        }
+
+
+    }
+
+    function handleQuestionResult(data) {
+        console.log('Data', data)
+        // console.log('Question errors', data.errors)
+        let errors = questionForm.querySelectorAll('.error')
+        if (errors) {
+            errors.forEach(error => {
+                error.remove()
+            });
+
+        }
+
+        if (data.errors) {
+            let errorContainers = Array.from(questionForm.querySelectorAll('.errorcontainer'))
+            let questionError = document.createElement('p');
+            questionError.setAttribute('class', 'error');
+            let questionTypeError = document.createElement('p');
+            questionTypeError.setAttribute('class', 'error');
+
+            data.errors.forEach(error => {
+                if (error[0] == 'question') {
+                    questionError.textContent += error[1] + ' ';
+                }
+                if (error[0] == 'question_type') {
+                    questionTypeError.textContent += error[1] + ' ';
+                }
+
+                console.log(error[0], error[1])
+            });
+
+            errorContainers[0].appendChild(questionError)
+            errorContainers[1].appendChild(questionTypeError)
+        } else {
+            createPreview(data)
+            // questionForm.reset()
+
+        }
+
+    }
+
+    function handleDeleteQuesitonResult(data, preview) {
+        console.log(data)
+
+        if (data.error) {
+            preview.querySelector('.error').textContent = data.error;
+        } else {
+            preview.remove()
+            console.log('removed question')
+        }
+    }
+
+    function handleOptionResult(data, preview) {
+        console.log('went throguh: ', data)
+        if (data.error) {
+
+        }
+    }
+
+    function handleOtherFieldResult(data, preview) {
+        console.log('data: ', data)
+        if (data.error) {
+            preview.querySelector('.otherField').querySelector('.error').textContent = data.error
+        } else {
+
+
+            let questionId = preview.getAttribute('data-id');
+            let buttonContainer = preview.querySelector('.buttons')
+            let otherField = preview.querySelector('.otherField')
+            otherField.remove()
+
+            console.log('remove otherfield')
+
+            let addOtherFieldBtn = document.createElement('button');
+            addOtherFieldBtn.setAttribute('class', 'otherFieldBtn');
+            addOtherFieldBtn.textContent = 'Add other field';
+            addOtherFieldBtn.addEventListener('click', () => {
+                if (!preview.querySelector('.otherField')) {
+
+                    // !  handleFormSubmit([['addOtherField', questionId]])
+                    if (true) {  // ! CHange to if post wen through
+                        createPreviewOtherField(preview)
+                    } else {
+                        // ! handle errors
+                        console.log(error, 'error')
+                    }
+                }
+
+            })
+            buttonContainer.appendChild(addOtherFieldBtn);
+        }
+    }
+
+    function handleAddOtherFieldResult(data, preview) {
+        console.log('data: ', data)
+        console.log('aaaaa')
+        if (data.error) {
+            preview.querySelector('.error').textContent = data.error;
+        } else {
+            console.log('add this hsit')
+            let otherField = document.createElement('div');
+            otherField.setAttribute('class', 'otherField')
+            let input = document.createElement('input')
+            input.disabled = true;
+            input.value = 'Other';
+            let btn = document.createElement('button');
+            btn.setAttribute('class', 'deleteotherField')
+            btn.addEventListener('click', () => {
+                deleteotherField(preview, otherField)
+            })
+            btn.textContent = 'Delete'
+
+            otherField.appendChild(input)
+            otherField.appendChild(btn)
+            preview.insertBefore(otherField, preview.querySelector('.buttons'))
+            preview.querySelector('.addOtherFieldBtn').remove()
+            // preview.appendChild(otherField)
+
+        }
+    }
+
+    function handleDeletePreviewOption(data, preview, option) {
+        console.log('data: ', data)
+
+        if (data.error) {
+            preview.querySelector('.error').textContent = error
+        } else {
+            option.remove()
+            let options = Array.from(preview.querySelectorAll('.optionContainer'))
+
+            if (options.length == 1) {
+                preview.querySelector('.optionContainer').querySelector('button').remove();
+            }
+
+
+        }
+    }
+
+    function handleChangePreviewQuestionTitle(data, preview) {
+        if (data.error) {
+            preview.querySelector('.question').querySelector('.error').textContent = data.error
+        }
+    }
+
+    function handleSelect(data, preview) {
+        if (data.error) {
+            preview.querySelector('.error').textContent = error;
+        }
+    }
+</script>
+{% endblock content %}
